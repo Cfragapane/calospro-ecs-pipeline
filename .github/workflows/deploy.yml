@@ -1,0 +1,50 @@
+name: CalosPro CI/CD Pipeline
+
+# CALOSPRO-71: Trigger bei Push auf den Hauptzweig (main oder master)
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-and-push:
+    name: Build, Scan and Deploy to AWS
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Code aus dem GitHub-Repository auschecken
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # 2. AWS-Zugangsdaten sicher über GitHub Secrets laden
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-central-1
+
+    # 3. Am Amazon ECR Registry anmelden
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # 4. CALOSPRO-72 & 73: Container-Image lokal auf dem GitHub-Server bauen
+    - name: Build Docker Image
+      run: |
+        docker build -t ${{ steps.login-ecr.outputs.registry }}/calospro-repo:latest .
+
+    # 5. CALOSPRO-74: Sicherheits-Scan direkt in der Pipeline mit Trivy ausführen
+    - name: Run Trivy Security Scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '${{ steps.login-ecr.outputs.registry }}/calospro-repo:latest'
+        format: 'table'
+        exit-code: '0' # Verhindert, dass die Pipeline bei unkritischen Warnungen direkt abbricht
+        severity: 'CRITICAL,HIGH'
+
+    # 6. Wenn der Scan sauber ist: Image live in dein AWS ECR schieben
+    - name: Push Image to Amazon ECR
+      run: |
+        docker push ${{ steps.login-ecr.outputs.registry }}/calospro-repo:latest

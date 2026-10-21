@@ -1,0 +1,4 @@
+{
+  "aws:cdk:bootstrap:account": "691745415276",
+  "aws:cdk:bootstrap:region": "eu-central-1"
+}
